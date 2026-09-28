@@ -24,6 +24,8 @@ This fork of [muhqu/dterm][upstream] adds shell-like command history to the comm
   - Esc closes the search and leaves the command field unchanged.
 - The history keeps up to 500 commands and is kept across relaunches. Commands that start with a space aren't recorded, as with bash's `HISTCONTROL=ignorespace` or zsh's `HIST_IGNORE_SPACE`.
 
+It also opens **⌘↩** (*Execute in Terminal*) in [agterm][] instead of iTerm2 when agterm is installed. The command runs in a new agterm session in the working directory. Without agterm, it falls back to Terminal.
+
 # How to get it?
 
 For drag'n'drop installable DMG images, see the [releases][] section of [muhqu's DTerm fork][releases] on GitHub.  
@@ -49,4 +51,5 @@ Copyright © 2004-2013 [Decimus Software, Inc][decimus].
 
 [releases]: https://github.com/muhqu/dterm/releases
 [upstream]: https://github.com/muhqu/dterm
+[agterm]: https://github.com/umputun/agterm
 [decimus]: http://decimus.net

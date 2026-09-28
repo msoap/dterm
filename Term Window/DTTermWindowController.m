@@ -10,12 +10,59 @@
 #import "DTResultsTextView.h"
 #import "DTRunManager.h"
 #import "DTShellUtilities.h"
-#import "iTerm2.h"
 #import "Terminal.h"
 
 static void * DTPreferencesContext = &DTPreferencesContext;
 
 static const NSUInteger DTCommandHistoryMaxEntries = 500;
+
+static NSString* const DTAgtermBundleIdentifier = @"com.umputun.agterm";
+
+// Runs agterm's bundled agtermctl and returns the `result` object of its JSON reply,
+// or nil if the command failed, with the reason in `errorMessage`.
+static NSDictionary* runAgtermctl(NSURL* agtermctlURL, NSArray<NSString*>* arguments, NSString** errorMessage) {
+	// Options go after the subcommand, and before a `--` that ends them
+	NSMutableArray* args = [arguments mutableCopy];
+	NSUInteger optionsEnd = [args indexOfObject:@"--"];
+	[args insertObject:@"--json" atIndex:(optionsEnd == NSNotFound ? [args count] : optionsEnd)];
+
+	NSTask* task = [[NSTask alloc] init];
+	task.executableURL = agtermctlURL;
+	task.arguments = args;
+	NSPipe* stdOut = [NSPipe pipe];
+	NSPipe* stdErr = [NSPipe pipe];
+	task.standardOutput = stdOut;
+	task.standardError = stdErr;
+	task.standardInput = [NSFileHandle fileHandleWithNullDevice];
+
+	NSError* launchError = nil;
+	if(![task launchAndReturnError:&launchError]) {
+		if(errorMessage)
+			*errorMessage = [launchError localizedDescription];
+		return nil;
+	}
+	NSData* outData = [[stdOut fileHandleForReading] readDataToEndOfFile];
+	NSData* errData = [[stdErr fileHandleForReading] readDataToEndOfFile];
+	[task waitUntilExit];
+
+	// agterm's own errors come back as {"ok":false,"error":…} on stdout, connection failures on stderr
+	id reply = [outData length] ? [NSJSONSerialization JSONObjectWithData:outData options:0 error:NULL] : nil;
+	if(![reply isKindOfClass:[NSDictionary class]])
+		reply = nil;
+	if([reply[@"ok"] boolValue]) {
+		id result = reply[@"result"];
+		return [result isKindOfClass:[NSDictionary class]] ? result : @{};
+	}
+
+	if(errorMessage) {
+		NSString* message = reply[@"error"];
+		if(![message isKindOfClass:[NSString class]])
+			message = [[[NSString alloc] initWithData:errData encoding:NSUTF8StringEncoding]
+					   stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+		*errorMessage = message;
+	}
+	return nil;
+}
 
 @implementation DTTermWindowController
 
@@ -361,6 +408,61 @@ static const NSUInteger DTCommandHistoryMaxEntries = 500;
     [runsController addObject:runManager];
 }
 
+// Opens a new agterm session in the working directory and types the command into its shell.
+// Runs off the main thread, because a freshly launched agterm takes a while to answer on its control socket.
+- (void)executeCommandInAgterm:(NSURL*)agtermURL agtermctl:(NSURL*)agtermctlURL {
+	NSString* directory = self.workingDirectory ?: NSHomeDirectory();
+	NSString* commandString = self.command;
+
+	if(![[NSRunningApplication runningApplicationsWithBundleIdentifier:DTAgtermBundleIdentifier] count])
+		[[NSWorkspace sharedWorkspace] openApplicationAtURL:agtermURL
+											  configuration:[NSWorkspaceOpenConfiguration configuration]
+										  completionHandler:nil];
+
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+		NSString* error = nil;
+
+		// Raise agterm's active window (reopening it if it was closed), retrying until agterm is up
+		NSDictionary* window = nil;
+		NSDate* deadline = [NSDate dateWithTimeIntervalSinceNow:10.0];
+		while(!(window = runAgtermctl(agtermctlURL, @[@"window", @"select", @"active"], &error)) && [deadline timeIntervalSinceNow] > 0)
+			[NSThread sleepForTimeInterval:0.1];
+
+		// Create the session in that window; agterm selects and focuses it
+		NSString* windowID = window[@"id"];
+		NSString* sessionID = nil;
+		if(windowID)
+			sessionID = runAgtermctl(agtermctlURL, @[@"session", @"new", @"--window", windowID, @"--cwd", directory], &error)[@"id"];
+		if(!sessionID) {
+			NSLog(@"Failed to open an agterm session: %@", error);
+			dispatch_async(dispatch_get_main_queue(), ^{
+				NSBeep();
+			});
+			return;
+		}
+
+		// agtermctl only raises the window within agterm; bring agterm itself to the front
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[[[NSRunningApplication runningApplicationsWithBundleIdentifier:DTAgtermBundleIdentifier] firstObject] activateWithOptions:0];
+		});
+
+		if(![commandString length])
+			return;
+
+		// Wait for the shell to print its prompt before typing the command
+		NSCharacterSet* whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+		deadline = [NSDate dateWithTimeIntervalSinceNow:5.0];
+		while(![[runAgtermctl(agtermctlURL, @[@"session", @"text", @"--target", sessionID], NULL)[@"text"] stringByTrimmingCharactersInSet:whitespace] length]
+			  && [deadline timeIntervalSinceNow] > 0)
+			[NSThread sleepForTimeInterval:0.05];
+
+		// The newline makes agterm press Return; `--` keeps a command starting with "-" from parsing as an option
+		NSArray* typeArguments = @[@"session", @"type", @"--target", sessionID, @"--", [commandString stringByAppendingString:@"\n"]];
+		if(!runAgtermctl(agtermctlURL, typeArguments, &error))
+			NSLog(@"Failed to type the command into agterm: %@", error);
+	});
+}
+
 - (IBAction)executeCommandInTerminal:(id) __unused sender {
 	// Commit editing first
 	if(![[self window] makeFirstResponder:[self window]])
@@ -368,37 +470,14 @@ static const NSUInteger DTCommandHistoryMaxEntries = 500;
 
 	[self addCommandToHistory:self.command];
 
-	NSString* cdCommandString = [NSString stringWithFormat:@"cd %@", escapedPath(self.workingDirectory)];
-	
-	id iTerm = [SBApplication applicationWithBundleIdentifier:@"com.googlecode.iterm2"];
-	if(!iTerm)
-		iTerm = [SBApplication applicationWithBundleIdentifier:@"net.sourceforge.iTerm"]; // legacy iTerm
-    
-    // test for iTerms newer scripting bridge
-    if(iTerm && [iTerm respondsToSelector:@selector(createWindowWithDefaultProfileCommand:)]) {
-        iTerm2Window *window = [iTerm createWindowWithDefaultProfileCommand:nil];
-        iTerm2Session *session = [window currentSession];
-        
-        int cnt = 0;
-        while ([[session text] length] == 0) {
-            if ( cnt++ > 100 ) {
-                NSLog(@"timeout reached");
-                break;
-            }
-            NSLog(@"wait for prompt...");
-            [NSThread sleepForTimeInterval:0.01f];
-        }
-        
-        // write text "cd ~/whatever"
-        [session writeContentsOfFile:nil text:cdCommandString newline:true];
-        
-        // write text "thecommand"
-        if ([self.command length] > 0) {
-            [session writeContentsOfFile:nil text:self.command newline:true];
-        }
-        
-        [iTerm activate];
-    } else {
+	// agterm if it's installed, Terminal otherwise
+	NSURL* agtermURL = [[NSWorkspace sharedWorkspace] URLForApplicationWithBundleIdentifier:DTAgtermBundleIdentifier];
+	NSURL* agtermctlURL = [agtermURL URLByAppendingPathComponent:@"Contents/MacOS/agtermctl"];
+	if(agtermctlURL && [[NSFileManager defaultManager] isExecutableFileAtPath:[agtermctlURL path]]) {
+		[self executeCommandInAgterm:agtermURL agtermctl:agtermctlURL];
+	} else {
+		NSString* cdCommandString = [NSString stringWithFormat:@"cd %@", escapedPath(self.workingDirectory)];
+
 		TerminalApplication* terminal = (TerminalApplication *)[SBApplication applicationWithBundleIdentifier:@"com.apple.Terminal"];
 		BOOL terminalAlreadyRunning = [terminal isRunning];
 		

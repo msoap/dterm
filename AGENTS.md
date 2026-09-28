@@ -62,7 +62,12 @@ Tests: the `Tests` target (XCTest, `Tests/ShellUtilitiesTests.m`, which covers `
   - AppleScript window coordinates are flipped into Cocoa screen coordinates before use.
 - **Term window (`DTTermWindowController`, `TermWindow.nib`)**: an `NSPanel` positioned over the front window (70% of its width, min 640, capped relative to 1680). It hides on resign-key.
   - Each executed command becomes a `DTRunManager` added to `runsController`, an `NSArrayController` bound to `runs`. Previous/next result navigation is the array controller's `selectPrevious:`/`selectNext:`. `DTResultsToKeep` trims finished runs on deactivate.
-  - "Execute in Terminal" drives iTerm2 (preferred) or Terminal via ScriptingBridge.
+  - "Execute in Terminal" (⌘↩) uses agterm when it is installed (`com.umputun.agterm`), otherwise Terminal via ScriptingBridge.
+    - agterm is driven off the main thread by the `agtermctl` bundled in `agterm.app/Contents/MacOS`, which is launched with `--json`:
+      - `window select active` raises (or reopens) the active window, retried while a freshly launched agterm starts up.
+      - `session new --window … --cwd …` creates a selected session in that window.
+      - `session type` types the command plus a newline, once `session text` shows a prompt.
+    - agtermctl doesn't activate agterm itself, so DTerm activates it through `NSRunningApplication`.
 - **Command field (`DTCommandFieldEditor`)**: a custom field editor returned from `windowWillReturnFieldEditor:toObject:`. Tab completion shells out to bash `compgen` (`-completionsForPartialWord:…` in the window controller). Shell quoting helpers live in `Utilities/DTShellUtilities`.
 - **Command history**: `DTTermWindowController` keeps `commandHistory` (oldest first, at most 500, consecutive duplicates dropped, commands starting with a space not recorded), saved in the `DTCommandHistory` default. Text in the command field is replaced only through `-replaceCommandFieldText:`.
   - ↑/↓ (and ⌃P/⌃N): `DTCommandFieldEditor -moveUp:`/`-moveDown:` call `-historyPrevious`/`-historyNext`. While the Tab completion list is open, it consumes the arrow keys itself.
