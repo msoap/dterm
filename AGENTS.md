@@ -23,12 +23,15 @@ This machine has only the Xcode **Command Line Tools**, not Xcode. `xcodebuild`,
 The `Makefile` builds with the Command Line Tools only (GNU Make 3.81, clang, plutil, codesign, hdiutil):
 
 ```sh
-make                               # build/Release/DTerm.app (universal arm64 + x86_64, ad-hoc signed)
+make                               # build/Release/DTerm.app (host architecture only, ad-hoc signed)
+make build-universal               # build/Release/DTerm.app (universal arm64 + x86_64)
 make dmg                           # build/Release/DTerm.dmg (app + /Applications symlink, no background/layout)
+make dmg ARCHS="arm64 x86_64"      # universal DMG
 make clean                         # rm -rf build
-make ARCHS=arm64                   # faster single-arch build
 make CODESIGN_IDENTITY="Developer ID Application: …"   # real signing identity instead of ad-hoc
 ```
+
+- **Architectures:** `ARCHS` defaults to `uname -m`. Objects go to `build/obj/<archs>/` (e.g. `build/obj/arm64-x86_64/`), and the binary is linked there and copied into the bundle on every build. This means switching between single-arch and universal builds never mixes stale objects.
 
 - **Sources:** `.m` files are picked up automatically from `.`, `Utilities/`, `Term Window/` and `3rd party source/ShortcutRecorder/`. A new source directory needs its own static pattern rule. The Makefile explains why: Make 3.81 won't match plain pattern rules whose prerequisites contain spaces.
 - **Resources:** listed explicitly in the `app` recipe, so a new resource file must be added there.

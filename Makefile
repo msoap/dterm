@@ -3,28 +3,37 @@
 # Interface Builder files can't be compiled without Xcode (ibtool), so the
 # bundle gets the pre-compiled nibs from CompiledNibs/ instead of the .xib files.
 #
-#   make          build build/Release/DTerm.app
-#   make dmg      build build/Release/DTerm.dmg
-#   make clean    remove build/
+#   make                  build build/Release/DTerm.app for the host architecture
+#   make build-universal  build build/Release/DTerm.app for arm64 + x86_64
+#   make dmg              build build/Release/DTerm.dmg
+#   make clean            remove build/
 #
-# Overridable: ARCHS, CODESIGN_IDENTITY ("-" = ad-hoc), CODESIGN_FLAGS,
-# MACOSX_DEPLOYMENT_TARGET, SDKROOT.
+# Overridable: ARCHS (default: host architecture), CODESIGN_IDENTITY ("-" = ad-hoc),
+# CODESIGN_FLAGS, MACOSX_DEPLOYMENT_TARGET, SDKROOT.
 
-APP_NAME    := DTerm
+APP_NAME        := DTerm
+HOST_ARCH       := $(shell uname -m)
+UNIVERSAL_ARCHS := arm64 x86_64
+
+ARCHS                    ?= $(HOST_ARCH)
+MACOSX_DEPLOYMENT_TARGET ?= 12.0
+SDKROOT                  ?= $(shell xcrun --sdk macosx --show-sdk-path 2>/dev/null)
+CODESIGN_IDENTITY        ?= -
+CODESIGN_FLAGS           ?=
+
+empty :=
+space := $(empty) $(empty)
+
 BUILD_DIR   := build/Release
-OBJ_DIR     := build/obj
+# One object directory per architecture set, so switching ARCHS never mixes objects
+OBJ_DIR     := build/obj/$(subst $(space),-,$(strip $(ARCHS)))
+BIN         := $(OBJ_DIR)/$(APP_NAME)
 APP         := $(BUILD_DIR)/$(APP_NAME).app
 CONTENTS    := $(APP)/Contents
 RES         := $(CONTENTS)/Resources
 EXE         := $(CONTENTS)/MacOS/$(APP_NAME)
 DMG         := $(BUILD_DIR)/$(APP_NAME).dmg
 DMG_STAGING := $(BUILD_DIR)/dmg-staging
-
-ARCHS                    ?= arm64 x86_64
-MACOSX_DEPLOYMENT_TARGET ?= 12.0
-SDKROOT                  ?= $(shell xcrun --sdk macosx --show-sdk-path 2>/dev/null)
-CODESIGN_IDENTITY        ?= -
-CODESIGN_FLAGS           ?=
 
 # Same versioning scheme as the Xcode project's "Revision" target
 GIT_COUNT      := $(shell git rev-list --count HEAD 2>/dev/null || echo 0)
@@ -52,11 +61,14 @@ TERM_OBJS := $(patsubst %.m,$(OBJ_DIR)/term/%.o,$(call srcs_in,Term Window))
 SR_OBJS   := $(patsubst %.m,$(OBJ_DIR)/sr/%.o,$(call srcs_in,3rd party source/ShortcutRecorder))
 OBJS      := $(ROOT_OBJS) $(UTIL_OBJS) $(TERM_OBJS) $(SR_OBJS)
 
-.PHONY: all build app dmg clean
+.PHONY: all build build-universal app dmg clean
 
 all: build
 
 build: app
+
+build-universal:
+	@$(MAKE) build ARCHS="$(UNIVERSAL_ARCHS)"
 
 define compile
 @mkdir -p $(@D)
@@ -75,16 +87,18 @@ $(TERM_OBJS): $(OBJ_DIR)/term/%.o: Term\ Window/%.m Makefile
 $(SR_OBJS): $(OBJ_DIR)/sr/%.o: 3rd\ party\ source/ShortcutRecorder/%.m Makefile
 	$(compile)
 
-$(EXE): $(OBJS)
+$(BIN): $(OBJS)
 	@mkdir -p $(@D)
-	@echo "LINK    $@"
+	@echo "LINK    $@ ($(ARCHS))"
 	@$(CC) $(LDFLAGS) $(FRAMEWORKS) $(OBJS) -o $@
 
-# Resources are re-copied on every build so removed files don't linger.
-app: $(EXE)
+# The executable and resources are re-copied on every build, so the bundle
+# always matches the current ARCHS and removed files don't linger.
+app: $(BIN)
 	@echo "BUNDLE  $(APP)"
 	@rm -rf "$(RES)"
-	@mkdir -p "$(RES)/Base.lproj" "$(RES)/en.lproj"
+	@mkdir -p "$(RES)/Base.lproj" "$(RES)/en.lproj" "$(dir $(EXE))"
+	@cp "$(BIN)" "$(EXE)"
 	@cp CompiledNibs/RTFWindow.nib "$(RES)/"
 	@cp CompiledNibs/Base.lproj/*.nib "$(RES)/Base.lproj/"
 	@cp en.lproj/*.strings "$(RES)/en.lproj/"
