@@ -59,6 +59,16 @@
 	[super insertTab:sender];
 }
 
+// ↑ / ↓ (and ⌃P / ⌃N, which map to the same selectors) step through the command history.
+// While the Tab completion list is open it handles the arrow keys itself, so these aren't called then.
+- (void)moveUp:(id) __unused sender {
+	[controller historyPrevious];
+}
+
+- (void)moveDown:(id) __unused sender {
+	[controller historyNext];
+}
+
 - (NSRange)rangeForUserCompletion {
 	NSRange selectedRange = [[[self selectedRanges] firstObject] rangeValue];
 	NSString* str = [self string];

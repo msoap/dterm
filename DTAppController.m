@@ -20,6 +20,7 @@ NSString* const DTFontSizeKey = @"DTFontSize";
 NSString* const DTDisableAntialiasingKey = @"DTDisableAntialiasing";
 NSString* const DTDisableWorkdirUpfind = @"DTDisableWorkdirUpfind";
 NSString* const DTWorkdirUpfindEntries = @"DTWorkdirUpfindEntries";
+NSString* const DTCommandHistoryKey = @"DTCommandHistory";
 
 OSStatus DTHotKeyHandler(EventHandlerCallRef nextHandler,EventRef theEvent, void *userData);
 OSStatus DTHotKeyHandler(EventHandlerCallRef nextHandler,EventRef theEvent, void *userData)
@@ -65,7 +66,8 @@ OSStatus DTHotKeyHandler(EventHandlerCallRef nextHandler,EventRef theEvent, void
 								  DTTextColorKey: [NSKeyedArchiver archivedDataWithRootObject:[[NSColor whiteColor] colorWithAlphaComponent:0.9]],
 								  DTFontNameKey: @"Monaco",
 								  DTFontSizeKey: @10.0f,
-								  DTDisableAntialiasingKey: @NO};
+								  DTDisableAntialiasingKey: @NO,
+								  DTCommandHistoryKey: @[]};
 	[[NSUserDefaults standardUserDefaults] registerDefaults:defaultsDict];
 	
 	// Register for URL handling

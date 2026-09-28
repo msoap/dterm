@@ -13,6 +13,7 @@ extern NSString* const DTResultsToKeepKey;
 extern NSString* const DTTextColorKey;
 extern NSString* const DTFontNameKey;
 extern NSString* const DTFontSizeKey;
+extern NSString* const DTCommandHistoryKey;
 
 @interface DTAppController : NSObject {
 	IBOutlet SUUpdater* __unsafe_unretained sparkleUpdater;

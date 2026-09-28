@@ -5,6 +5,7 @@
 
 #import "DTAppController.h"
 #import "DTCommandFieldEditor.h"
+#import "DTHistorySearchController.h"
 #import "DTResultsView.h"
 #import "DTResultsTextView.h"
 #import "DTRunManager.h"
@@ -13,6 +14,8 @@
 #import "Terminal.h"
 
 static void * DTPreferencesContext = &DTPreferencesContext;
+
+static const NSUInteger DTCommandHistoryMaxEntries = 500;
 
 @implementation DTTermWindowController
 
@@ -24,7 +27,11 @@ static void * DTPreferencesContext = &DTPreferencesContext;
 		
 		self.command = @"";
 		self.runs = [NSMutableArray array];
-		
+
+		NSArray* savedHistory = [[NSUserDefaults standardUserDefaults] stringArrayForKey:DTCommandHistoryKey];
+		commandHistory = savedHistory ? [savedHistory mutableCopy] : [NSMutableArray array];
+		historyIndex = NSNotFound;
+
 		NSUserDefaultsController *sdc = [NSUserDefaultsController sharedUserDefaultsController];
 		[sdc addObserver:self forKeyPath:@"values.DTTextColor" options:0 context:DTPreferencesContext];
 		[sdc addObserver:self forKeyPath:@"values.DTFontName" options:0 context:DTPreferencesContext];
@@ -48,7 +55,16 @@ static void * DTPreferencesContext = &DTPreferencesContext;
 	[resultsView setFrame:[placeholderForResultsView frame]];
 	[placeholderForResultsView removeFromSuperview];
 	[[[self window] contentView] addSubview:resultsView];
-	
+
+	// Add "Search History…" (⌃R) after "Pull Command from Results"
+	NSMenuItem* searchHistoryItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Search History…", @"action menu item")
+															   action:@selector(showHistorySearch:)
+														keyEquivalent:@"r"];
+	[searchHistoryItem setKeyEquivalentModifierMask:NSEventModifierFlagControl];
+	[searchHistoryItem setTarget:self];
+	NSInteger pullCommandIndex = [actionMenu indexOfItemWithTarget:self andAction:@selector(pullCommandFromResults:)];
+	[actionMenu insertItem:searchHistoryItem atIndex:(pullCommandIndex >= 0 ? pullCommandIndex + 1 : 1)];
+
 	// Remove the excess action menu items if we're showing the dock icon
     if( ![[NSBundle mainBundle] objectForInfoDictionaryKey:@"LSUIElement"] ) {
         // It's not a UIElement, i.e. the dock icon is shown
@@ -94,7 +110,8 @@ static void * DTPreferencesContext = &DTPreferencesContext;
 	// Set the state variables
 	self.workingDirectory = wdPath;
 	self.selectedURLs = selection;
-		
+	[self resetHistoryPosition];
+
 	// Hide window
 	NSWindow* window = [self window];
 	[window setAlphaValue:0.0];
@@ -135,6 +152,8 @@ static void * DTPreferencesContext = &DTPreferencesContext;
 }
 
 - (void)deactivate {
+	[historySearch close];
+
 	NSUInteger numRunsToKeep = (NSUInteger)[[NSUserDefaults standardUserDefaults] integerForKey:DTResultsToKeepKey];
 	if(numRunsToKeep > 100)
 		numRunsToKeep = 100;
@@ -169,8 +188,21 @@ static void * DTPreferencesContext = &DTPreferencesContext;
 - (void)windowDidResignKey:(NSNotification*)notification {
 	if([notification object] != [self window])
 		return;
-	
+
+	// The history search panel takes key status while it's open; it deals with focus leaving DTerm itself
+	if(historySearch.isOpen)
+		return;
+
 	[self deactivate];
+}
+
+- (void)windowDidResize:(NSNotification*)notification {
+	if([notification object] != [self window])
+		return;
+
+	// The search panel is a child window, so it has moved with the window's bottom edge; put it back under the command field
+	if(historySearch.isOpen)
+		[historySearch moveBelowScreenRect:[self historySearchAnchor]];
 }
 
 - (IBAction)insertSelection:(id) __unused sender {
@@ -205,22 +237,124 @@ static void * DTPreferencesContext = &DTPreferencesContext;
 - (IBAction)pullCommandFromResults:(id) __unused sender {
 	id selection = [runsController selection];
 	NSString* resultsCommand = [selection valueForKey:@"command"];
-	if(resultsCommand) {
-		// At this point, self.command is still the last executed command (?!), so we have to use
-		// the length of [commandFieldEditor string] to reflect anything the user's typed since then
-		// https://decimus.fogbugz.com/default.asp?11185
-		[commandFieldEditor setSelectedRange:NSMakeRange(0, [[commandFieldEditor string] length])];
-		[commandFieldEditor insertText:resultsCommand];
+	if(resultsCommand)
+		[self replaceCommandFieldText:resultsCommand];
+}
+
+// Replaces everything in the command field with `text`, puts the cursor at the end, and leaves the field being edited
+- (void)replaceCommandFieldText:(NSString*)text {
+	if(![commandFieldEditor isFirstResponder])
+		[[self window] makeFirstResponder:commandField];
+
+	// self.command only catches up when editing ends, so it may be stale here; the field editor's string is current
+	// https://decimus.fogbugz.com/default.asp?11185
+	[commandFieldEditor insertText:(text ? text : @"")
+				  replacementRange:NSMakeRange(0, [[commandFieldEditor string] length])];
+	[commandFieldEditor setSelectedRange:NSMakeRange([[commandFieldEditor string] length], 0)];
+}
+
+#pragma mark command history
+
+- (void)addCommandToHistory:(NSString*)newCommand {
+	if(![newCommand length])
+		return;
+
+	// A leading space keeps the command out of the history, like bash's HISTCONTROL=ignorespace and zsh's HIST_IGNORE_SPACE
+	if(![newCommand hasPrefix:@" "] && ![[commandHistory lastObject] isEqualToString:newCommand]) {
+		[commandHistory addObject:newCommand];
+		if([commandHistory count] > DTCommandHistoryMaxEntries)
+			[commandHistory removeObjectsInRange:NSMakeRange(0, [commandHistory count] - DTCommandHistoryMaxEntries)];
+		[[NSUserDefaults standardUserDefaults] setObject:[commandHistory copy] forKey:DTCommandHistoryKey];
+	}
+
+	[self resetHistoryPosition];
+}
+
+- (void)resetHistoryPosition {
+	historyIndex = NSNotFound;
+	historyDraft = nil;
+}
+
+- (void)historyPrevious {
+	if(![commandHistory count] || historyIndex == 0) {
+		NSBeep();
+		return;
+	}
+
+	// Starting to step back: remember what was typed, so stepping forward past the newest entry brings it back
+	if(historyIndex == NSNotFound || historyIndex > [commandHistory count]) {
+		historyDraft = [[commandFieldEditor string] copy];
+		historyIndex = [commandHistory count];
+	}
+
+	historyIndex--;
+	[self replaceCommandFieldText:commandHistory[historyIndex]];
+}
+
+- (void)historyNext {
+	if(historyIndex == NSNotFound) {
+		NSBeep();
+		return;
+	}
+
+	historyIndex++;
+	if(historyIndex < [commandHistory count]) {
+		[self replaceCommandFieldText:commandHistory[historyIndex]];
+	} else {
+		NSString* draft = historyDraft;
+		[self resetHistoryPosition];
+		[self replaceCommandFieldText:draft];
 	}
 }
+
+// The command field's screen rect, widened to the right so the margins match on both sides of the window
+- (NSRect)historySearchAnchor {
+	NSWindow* window = [self window];
+	NSRect fieldRect = [window convertRectToScreen:[commandField convertRect:[commandField bounds] toView:nil]];
+	NSRect windowFrame = [window frame];
+	CGFloat inset = NSMinX(fieldRect) - NSMinX(windowFrame);
+
+	return NSMakeRect(NSMinX(fieldRect), NSMinY(fieldRect), NSWidth(windowFrame) - 2.0*inset, NSHeight(fieldRect));
+}
+
+- (IBAction)showHistorySearch:(id) __unused sender {
+	if(historySearch.isOpen)
+		return;
+
+	if(![commandFieldEditor isFirstResponder])
+		[[self window] makeFirstResponder:commandField];
+
+	if(!historySearch)
+		historySearch = [[DTHistorySearchController alloc] init];
+
+	__weak DTTermWindowController* weakSelf = self;
+	[historySearch showBelowScreenRect:[self historySearchAnchor]
+						  parentWindow:[self window]
+							   history:[commandHistory copy]
+							completion:^(NSString* chosenOrNil, BOOL lostFocus) {
+		DTTermWindowController* strongSelf = weakSelf;
+		if(lostFocus) {
+			[strongSelf deactivate];
+			return;
+		}
+
+		// Only fill in the command; the user runs it with Return
+		if(chosenOrNil)
+			[strongSelf replaceCommandFieldText:chosenOrNil];
+		[strongSelf resetHistoryPosition];
+	}];
+}
+
 - (IBAction)executeCommand:(id) __unused sender {
 	// Commit editing first
 	if(![[self window] makeFirstResponder:[self window]])
 		return;
-	
+
 	if(!self.command || ![self.command length])
 		return;
-	
+
+	[self addCommandToHistory:self.command];
+
     DTRunManager* runManager = [[DTRunManager alloc] initWithWD:self.workingDirectory
                                                       selection:self.selectedURLs
                                                         command:self.command];
@@ -231,7 +365,9 @@ static void * DTPreferencesContext = &DTPreferencesContext;
 	// Commit editing first
 	if(![[self window] makeFirstResponder:[self window]])
 		return;
-	
+
+	[self addCommandToHistory:self.command];
+
 	NSString* cdCommandString = [NSString stringWithFormat:@"cd %@", escapedPath(self.workingDirectory)];
 	
 	id iTerm = [SBApplication applicationWithBundleIdentifier:@"com.googlecode.iterm2"];

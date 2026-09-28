@@ -27,6 +27,7 @@
 		250075730CF0C24200949B95 /* ScriptingBridge.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 250075720CF0C24200949B95 /* ScriptingBridge.framework */; };
 		251453C30D720F35000B6100 /* FontNameToDisplayNameTransformer.m in Sources */ = {isa = PBXBuildFile; fileRef = 251453C10D720F35000B6100 /* FontNameToDisplayNameTransformer.m */; };
 		251D0E5F0D7CA32E00E9E49D /* DTAntialiasControllableTextField.m in Sources */ = {isa = PBXBuildFile; fileRef = 251D0E5E0D7CA32E00E9E49D /* DTAntialiasControllableTextField.m */; };
+		4D5E1A032E8F3B2000A1B2C3 /* DTHistorySearchController.m in Sources */ = {isa = PBXBuildFile; fileRef = 4D5E1A022E8F3B2000A1B2C3 /* DTHistorySearchController.m */; };
 		25229FF50CF8BEDE00DF702E /* DTTermWindowContentView.m in Sources */ = {isa = PBXBuildFile; fileRef = 25229FF40CF8BEDE00DF702E /* DTTermWindowContentView.m */; };
 		2522A1020CFB540500DF702E /* DTResultsTextView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2522A1010CFB540500DF702E /* DTResultsTextView.m */; };
 		2525DE5F0D234AE0009A5592 /* Growl Registration Ticket.growlRegDict in Resources */ = {isa = PBXBuildFile; fileRef = 2525DE5E0D234AE0009A5592 /* Growl Registration Ticket.growlRegDict */; };
@@ -115,6 +116,8 @@
 		251453C20D720F35000B6100 /* FontNameToDisplayNameTransformer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FontNameToDisplayNameTransformer.h; sourceTree = "<group>"; };
 		251D0E5D0D7CA32E00E9E49D /* DTAntialiasControllableTextField.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DTAntialiasControllableTextField.h; sourceTree = "<group>"; };
 		251D0E5E0D7CA32E00E9E49D /* DTAntialiasControllableTextField.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DTAntialiasControllableTextField.m; sourceTree = "<group>"; };
+		4D5E1A012E8F3B2000A1B2C3 /* DTHistorySearchController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DTHistorySearchController.h; sourceTree = "<group>"; };
+		4D5E1A022E8F3B2000A1B2C3 /* DTHistorySearchController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DTHistorySearchController.m; sourceTree = "<group>"; };
 		25229FF30CF8BEDE00DF702E /* DTTermWindowContentView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DTTermWindowContentView.h; sourceTree = "<group>"; };
 		25229FF40CF8BEDE00DF702E /* DTTermWindowContentView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DTTermWindowContentView.m; sourceTree = "<group>"; };
 		2522A1000CFB540500DF702E /* DTResultsTextView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DTResultsTextView.h; sourceTree = "<group>"; };
@@ -298,6 +301,8 @@
 				25229FF40CF8BEDE00DF702E /* DTTermWindowContentView.m */,
 				258375640CFF47E600943791 /* DTCommandFieldEditor.h */,
 				258375650CFF47E600943791 /* DTCommandFieldEditor.m */,
+				4D5E1A012E8F3B2000A1B2C3 /* DTHistorySearchController.h */,
+				4D5E1A022E8F3B2000A1B2C3 /* DTHistorySearchController.m */,
 				2522A1000CFB540500DF702E /* DTResultsTextView.h */,
 				2522A1010CFB540500DF702E /* DTResultsTextView.m */,
 				2583733D0CFE105F00943791 /* DTResultsView.h */,
@@ -637,6 +642,7 @@
 				3B3E1FB7190C10C500B31D3E /* SRKeyCodeTransformer.m in Sources */,
 				3B3E1FB6190C10C500B31D3E /* SRCommon.m in Sources */,
 				258375660CFF47E600943791 /* DTCommandFieldEditor.m in Sources */,
+				4D5E1A032E8F3B2000A1B2C3 /* DTHistorySearchController.m in Sources */,
 				3B3E1FBA190C10C500B31D3E /* SRValidator.m in Sources */,
 				257158E90CFF9A99007181F4 /* DTShellUtilities.m in Sources */,
 				25878A240D03399E00255595 /* DTProgressCancelButton.m in Sources */,
