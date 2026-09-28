@@ -13,6 +13,17 @@ Command line work isn't a separate task that should live on its own—it's an in
 
 ![](Images/DTerm-ScreenShot@2x.png)
 
+# What's new in this fork?
+
+This fork of [muhqu/dterm][upstream] adds shell-like command history to the command field.
+
+- **↑ / ↓** (or **⌃P / ⌃N**) step through the commands you've run. Stepping past the newest one brings back what you had typed.
+- **⌃R** opens a fuzzy search over the history, also available as *Search History…* in the action menu. The list filters as you type and highlights the matched letters.
+  - ↑ / ↓, or ⌃R again, move through the matches.
+  - Return or a double-click puts the chosen command in the command field without running it.
+  - Esc closes the search and leaves the command field unchanged.
+- The history keeps up to 500 commands and is kept across relaunches. Commands that start with a space aren't recorded, as with bash's `HISTCONTROL=ignorespace` or zsh's `HIST_IGNORE_SPACE`.
+
 # How to get it?
 
 For drag'n'drop installable DMG images, see the [releases][] section of [muhqu's DTerm fork][releases] on GitHub.  
@@ -37,4 +48,5 @@ Copyright © 2004-2013 [Decimus Software, Inc][decimus].
 "DTerm" and "Decimus" are either trademarks or registered trademarks of [Decimus Software, Inc][decimus].
 
 [releases]: https://github.com/muhqu/dterm/releases
+[upstream]: https://github.com/muhqu/dterm
 [decimus]: http://decimus.net
