@@ -5,11 +5,12 @@
 #
 #   make                  build build/Release/DTerm.app for the host architecture
 #   make build-universal  build build/Release/DTerm.app for arm64 + x86_64
+#   make deploy           install DTerm.app in ~/Applications or /Applications
 #   make dmg              build build/Release/DTerm.dmg
 #   make clean            remove build/
 #
 # Overridable: ARCHS (default: host architecture), CODESIGN_IDENTITY ("-" = ad-hoc),
-# CODESIGN_FLAGS, MACOSX_DEPLOYMENT_TARGET, SDKROOT.
+# CODESIGN_FLAGS, MACOSX_DEPLOYMENT_TARGET, SDKROOT, DEPLOY_HOME (for deploy).
 
 APP_NAME        := DTerm
 HOST_ARCH       := $(shell uname -m)
@@ -20,6 +21,7 @@ MACOSX_DEPLOYMENT_TARGET ?= 12.0
 SDKROOT                  ?= $(shell xcrun --sdk macosx --show-sdk-path 2>/dev/null)
 CODESIGN_IDENTITY        ?= -
 CODESIGN_FLAGS           ?=
+DEPLOY_HOME              ?= $(HOME)
 
 empty :=
 space := $(empty) $(empty)
@@ -61,7 +63,7 @@ TERM_OBJS := $(patsubst %.m,$(OBJ_DIR)/term/%.o,$(call srcs_in,Term Window))
 SR_OBJS   := $(patsubst %.m,$(OBJ_DIR)/sr/%.o,$(call srcs_in,3rd party source/ShortcutRecorder))
 OBJS      := $(ROOT_OBJS) $(UTIL_OBJS) $(TERM_OBJS) $(SR_OBJS)
 
-.PHONY: all build build-universal app dmg clean
+.PHONY: all build build-universal app deploy dmg clean
 
 all: build
 
@@ -116,6 +118,19 @@ app: $(BIN)
 	@echo "SIGN    $(APP) (identity: $(CODESIGN_IDENTITY))"
 	@codesign --force --sign "$(CODESIGN_IDENTITY)" $(CODESIGN_FLAGS) "$(APP)"
 	@echo "Built   $(APP) $(VERSION_PUBLIC)"
+
+deploy: app
+	@if [ -d "$(DEPLOY_HOME)/Applications" ]; then \
+		destination="$(DEPLOY_HOME)/Applications"; \
+	else \
+		destination="/Applications"; \
+	fi; \
+	staging="$$(mktemp -d "$$destination/.DTerm.deploy.XXXXXX")" || exit 1; \
+	trap 'rm -rf "$$staging"' EXIT; \
+	echo "DEPLOY  $(APP) -> $$destination/$(APP_NAME).app"; \
+	ditto "$(APP)" "$$staging/$(APP_NAME).app" || exit 1; \
+	rm -rf "$$destination/$(APP_NAME).app" || exit 1; \
+	mv "$$staging/$(APP_NAME).app" "$$destination/$(APP_NAME).app" || exit 1
 
 dmg: app
 	@echo "DMG     $(DMG)"
