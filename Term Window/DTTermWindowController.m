@@ -332,6 +332,15 @@ static NSDictionary* runAgtermctl(NSURL* agtermctlURL, NSArray<NSString*>* argum
 	if(historyIndex == NSNotFound || historyIndex > [commandHistory count]) {
 		historyDraft = [[commandFieldEditor string] copy];
 		historyIndex = [commandHistory count];
+		// The field keeps the last executed command. Skip that identical history entry on the first Up.
+		if([historyDraft isEqualToString:[commandHistory lastObject]]) {
+			historyIndex--;
+			if(historyIndex == 0) {
+				[self resetHistoryPosition];
+				NSBeep();
+				return;
+			}
+		}
 	}
 
 	historyIndex--;
@@ -345,7 +354,8 @@ static NSDictionary* runAgtermctl(NSURL* agtermctlURL, NSArray<NSString*>* argum
 	}
 
 	historyIndex++;
-	if(historyIndex < [commandHistory count]) {
+	if(historyIndex < [commandHistory count] &&
+	   !(historyIndex == [commandHistory count] - 1 && [historyDraft isEqualToString:[commandHistory lastObject]])) {
 		[self replaceCommandFieldText:commandHistory[historyIndex]];
 	} else {
 		NSString* draft = historyDraft;
