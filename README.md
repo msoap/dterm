@@ -30,13 +30,17 @@ It also opens **⌘↩** (*Execute in Terminal*) in [agterm][] instead of iTerm2
 
 For drag'n'drop installable DMG images, see the [releases][] section of [muhqu's DTerm fork][releases] on GitHub.  
 
-# How to build it yourself?
+# How to build and install from source?
+
+Requires macOS 12 or newer and the **Xcode Command Line Tools**. Install them with `xcode-select --install` if needed. The Command Line Tools provide the compiler and macOS SDK; the other build tools are included with macOS. Full Xcode, Homebrew, and third-party dependencies are not needed. The compiled nibs are included in this repository.
 
 ``` sh
-git clone git://github.com/muhqu/dterm
-cd ./dterm
-./build.sh --with-dmg
+git clone https://github.com/msoap/dterm.git
+cd dterm
+make build && make deploy
 ```
+
+`make build` creates `build/Release/DTerm.app`. `make deploy` installs it in `~/Applications` if that directory exists, or `/Applications` otherwise, replacing an existing DTerm.app there. You need write access to the destination directory.
 
 
 # License
